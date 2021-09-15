@@ -26,6 +26,7 @@ const Changeset = require('./Changeset');
 const _ = require('./underscore');
 
 const undoModule = (() => {
+  console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
   const stack = (() => {
     const stackElements = [];
     // two types of stackElements:
@@ -53,6 +54,7 @@ const undoModule = (() => {
       const e = _.extend(
           {}, event);
       e.elementType = UNDOABLE_EVENT;
+      console.log('pushEvent::e:', e, 'stackElements', stackElements);
       stackElements.push(e);
       numUndoableEvents++;
       // dmesg("pushEvent backset: "+event.backset);
@@ -130,10 +132,12 @@ const undoModule = (() => {
       pushExternalChange,
       clearStack,
       getNthFromTop,
+      stackElements,
     };
   })();
 
   // invariant: stack always has at least one undoable event
+  // undo 的指针，执行 undo 操作时，撤销的就是指针指向的操作
   let undoPtr = 0; // zero-index from top of stack, 0 == top
 
   const clearHistory = () => {
@@ -252,13 +256,20 @@ const undoModule = (() => {
   // "eventFunc" will be called exactly once.
 
   const performUndo = (eventFunc) => {
+    console.log(`performUndo:: undoPtr: ${undoPtr}  stack.numEvents(): ${stack.numEvents()}`);
     if (undoPtr < stack.numEvents() - 1) {
+      // 拿到要 undo 的操作
       const backsetEvent = stack.getNthFromTop(undoPtr);
       const selectionEvent = stack.getNthFromTop(undoPtr + 1);
+
+      // eventFunc 的第一个参数是一个 changeSet，第二个参数是选区信息（可选）
       const undoEvent = eventFunc(backsetEvent.backset, _getSelectionInfo(selectionEvent));
+      // undoEvent 入栈
       stack.pushEvent(undoEvent);
+      // 下一次 undo 的就是更早的操作（1 个是 backsetEvent，1 个是 undoEvent）
       undoPtr += 2;
-    } else { eventFunc(); }
+      console.log(`after undo:: undoPtr: ${undoPtr}  stack: `, stack.stackElements);
+    } else { eventFunc(); }  // 没有操作可以 undo
   };
 
   const performRedo = (eventFunc) => {
@@ -266,8 +277,12 @@ const undoModule = (() => {
       const backsetEvent = stack.getNthFromTop(0);
       const selectionEvent = stack.getNthFromTop(1);
       eventFunc(backsetEvent.backset, _getSelectionInfo(selectionEvent));
+
+      // undoEvent 出栈
       stack.popEvent();
+      // TODO-X undoEvent 已经出栈了，不是应该 undoPtr -= 1 吗？
       undoPtr -= 2;
+      console.log(`after redo:: undoPtr: ${undoPtr}  stack: `, stack.stackElements);
     } else { eventFunc(); }
   };
 

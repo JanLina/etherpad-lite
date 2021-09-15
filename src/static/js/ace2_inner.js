@@ -43,7 +43,7 @@ function Ace2Inner(editorInfo, cssManagers) {
   const undoModule = require('./undomodule').undoModule;
   const AttributeManager = require('./AttributeManager');
   const Scroll = require('./scroll');
-  const DEBUG = false;
+  const DEBUG = true;
 
   const THE_TAB = '    '; // 4
   const MAX_LIST_LEVEL = 16;
@@ -3156,6 +3156,7 @@ function Ace2Inner(editorInfo, cssManagers) {
         const oldEventType = currentCallStack.editEvent.eventType;
         currentCallStack.startNewEvent(which);
         undoModule[whichMethod]((backset, selectionInfo) => {
+          console.log('backset:: ', backset, 'selectionInfo:: ', selectionInfo);
           if (backset) {
             performDocumentApplyChangeset(backset);
           }
