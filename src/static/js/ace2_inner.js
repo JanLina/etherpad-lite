@@ -300,10 +300,13 @@ function Ace2Inner(editorInfo, cssManagers) {
   const inCallStack = (type, action) => {
     if (disposed) return;
 
-    const newEditEvent = (eventType) => ({
-      eventType,
-      backset: null,
-    });
+    const newEditEvent = (eventType) => {
+      // console.log('ace2_inner:: newEditEvent');
+      return {
+        eventType,
+        backset: null,
+      };
+    };
 
     const submitOldEvent = (evt) => {
       if (rep.selStart && rep.selEnd) {
@@ -335,6 +338,7 @@ function Ace2Inner(editorInfo, cssManagers) {
     };
 
     const startNewEvent = (eventType, dontSubmitOld) => {
+      // console.log('ace2_inner:: startNewEvent');
       const oldEvent = currentCallStack.editEvent;
       if (!dontSubmitOld) {
         submitOldEvent(oldEvent);
@@ -3156,7 +3160,7 @@ function Ace2Inner(editorInfo, cssManagers) {
         const oldEventType = currentCallStack.editEvent.eventType;
         currentCallStack.startNewEvent(which);
         undoModule[whichMethod]((backset, selectionInfo) => {
-          console.log('backset:: ', backset, 'selectionInfo:: ', selectionInfo);
+          console.log('ace2_inner::: backset:: ', backset, 'selectionInfo:: ', selectionInfo);
           if (backset) {
             performDocumentApplyChangeset(backset);
           }

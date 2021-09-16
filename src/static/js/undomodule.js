@@ -54,14 +54,17 @@ const undoModule = (() => {
       const e = _.extend(
           {}, event);
       e.elementType = UNDOABLE_EVENT;
-      console.log('pushEvent::e:', e, 'stackElements', stackElements);
+      console.log('push', e, stackElements);
       stackElements.push(e);
       numUndoableEvents++;
       // dmesg("pushEvent backset: "+event.backset);
     };
 
     const pushExternalChange = (cs) => {
+      console.log('pushExternalChange');
+
       const idx = stackElements.length - 1;
+      // 如果栈顶 event 也是 EXTERNAL_CHANGE，直接 compose 两个 cs
       if (stackElements[idx].elementType === EXTERNAL_CHANGE) {
         stackElements[idx].changeset =
             Changeset.compose(stackElements[idx].changeset, cs, getAPool());
@@ -74,14 +77,24 @@ const undoModule = (() => {
       }
     };
 
+    // ********************************************************* 重点 *********************************************************
+    // 取出距离栈顶 nthFromTop 的元素或者弹出栈顶元素的时候会调用
     const _exposeEvent = (nthFromTop) => {
       // precond: 0 <= nthFromTop < numUndoableEvents
       const targetIndex = stackElements.length - 1 - nthFromTop;
       let idx = stackElements.length - 1;
+
+      // 从栈顶往下遍历，跳过 UNDOABLE_EVENT，合并 ex
+      // 保证 targetIndex 拿到的 UNDOABLE_EVENT 后面没有任何 ex（都被合并到了 targetIndex - 1 的 ex 里）
+      // 也就是，targetIndex 拿到的一定是距离栈顶的第 nthFromTop 个 UNDOABLE_EVENT，且前 nthFromTop - 1 个也都是 UNDOABLE_EVENT
+
+      // 什么时候会 idx > targetIndex 不成立但 stackElements[idx].elementType === EXTERNAL_CHANGE 成立？
+      // 答案：idx === targetIndex && stackElements[idx].elementType === EXTERNAL_CHANGE
+      // 如果 targetIndex 指向的也是一个 ex，也需要向前置换一个 undo 过来
       while (idx > targetIndex || stackElements[idx].elementType === EXTERNAL_CHANGE) {
         if (stackElements[idx].elementType === EXTERNAL_CHANGE) {
           const ex = stackElements[idx];
-          const un = stackElements[idx - 1];
+          const un = stackElements[idx - 1];  // 一定会是 undo，因为连续的 ex 会合并
           if (un.backset) {
             const excs = ex.changeset;
             const unbs = un.backset;
@@ -96,13 +109,15 @@ const undoModule = (() => {
               }
             }
           }
+          // ex 和 un 调换位置
           stackElements[idx - 1] = ex;
           stackElements[idx] = un;
+          // 如果调换位置后的 ex 前面还是一个 ex，将两个 ex 合并
           if (idx >= 2 && stackElements[idx - 2].elementType === EXTERNAL_CHANGE) {
             ex.changeset =
                 Changeset.compose(stackElements[idx - 2].changeset, ex.changeset, getAPool());
             stackElements.splice(idx - 2, 1);
-            idx--;
+            idx--;  // splice 删了一个 ex，所以要 idx--，idx 此刻指向 un
           }
         } else {
           idx--;
@@ -137,7 +152,7 @@ const undoModule = (() => {
   })();
 
   // invariant: stack always has at least one undoable event
-  // undo 的指针，执行 undo 操作时，撤销的就是指针指向的操作
+  // 指向下一次应该 undo 的操作
   let undoPtr = 0; // zero-index from top of stack, 0 == top
 
   const clearHistory = () => {
@@ -192,7 +207,14 @@ const undoModule = (() => {
     return null;
   };
 
+  // TODO-X 哪些 event 会 report
+  // 1. 修改选区相关
+  // 2. 鼠标相关
+  // 3. 键盘相关
   const reportEvent = (event) => {
+    if (event.eventType !== 'idleWorkTimer') {
+      console.log('report');
+    }
     const topEvent = stack.getNthFromTop(0);
 
     const applySelectionToTop = () => {
@@ -203,9 +225,15 @@ const undoModule = (() => {
       }
     };
 
-    if ((!event.backset) || Changeset.isIdentity(event.backset)) {
+    if ((!event.backset) || Changeset.isIdentity(event.backset)) {  // 更新选区，undo 操作也会进这里
+      if (event.eventType !== 'idleWorkTimer') {
+        console.log('1');
+        console.log(event);
+      }
       applySelectionToTop();
-    } else {
+    } else {                                                        // event 是一个可以 undo 的操作，入栈
+      console.log('2');
+      // 如果栈顶事件和 event 是同一个 eventType，合并、更新选区
       let merged = false;
       if (topEvent.eventType === event.eventType) {
         const merge = _mergeChangesets(event.backset, topEvent.backset);
@@ -216,6 +244,7 @@ const undoModule = (() => {
           merged = true;
         }
       }
+      // 如果上一步没有做合并，将新的 event 入栈
       if (!merged) {
         /*
          * Push the event on the undo stack only if it exists, and if it's
@@ -228,6 +257,7 @@ const undoModule = (() => {
         }
       }
       undoPtr = 0;
+      console.log('xxxxxxxxxxx undoPtr = 0');
     }
   };
 
@@ -254,33 +284,42 @@ const undoModule = (() => {
   // "eventFunc" should take a changeset and an optional selection info object,
   // or can be called with no arguments to mean that no undo is possible.
   // "eventFunc" will be called exactly once.
-
+  // 1. 取出 undoPtr 指向的 UNDOABLE_EVENT
+  // 2. 根据这个 UNDOABLE_EVENT 生成 undoEvent（elementType 也是 UNDOABLE_EVENT），推入 stack（eventFunc 里应该执行了具体的撤销操作）
+  // 3. 更新 undoPtr
   const performUndo = (eventFunc) => {
-    console.log(`performUndo:: undoPtr: ${undoPtr}  stack.numEvents(): ${stack.numEvents()}`);
+    console.log(`BEFORE Undo:: undoPtr: ${undoPtr}  stack.numEvents(): ${stack.numEvents()}`);
     if (undoPtr < stack.numEvents() - 1) {
-      // 拿到要 undo 的操作
+      // 拿到要 undo 的 event
       const backsetEvent = stack.getNthFromTop(undoPtr);
       const selectionEvent = stack.getNthFromTop(undoPtr + 1);
 
       // eventFunc 的第一个参数是一个 changeSet，第二个参数是选区信息（可选）
       const undoEvent = eventFunc(backsetEvent.backset, _getSelectionInfo(selectionEvent));
-      // undoEvent 入栈
       stack.pushEvent(undoEvent);
       // 下一次 undo 的就是更早的操作（1 个是 backsetEvent，1 个是 undoEvent）
       undoPtr += 2;
-      console.log(`after undo:: undoPtr: ${undoPtr}  stack: `, stack.stackElements);
+      console.log(`AFTER Undo:: undoPtr: ${undoPtr}  stack: `, stack.stackElements);
     } else { eventFunc(); }  // 没有操作可以 undo
   };
 
+  // 只有上一个操作是 undo，才能 redo
+  // 1. 取出栈顶的 UNDOABLE_EVENT（一定是 undoEvent）
+  // 2. eventFunc 执行具体的重做操作
+  // 3. 将 undoEvent 弹出栈顶
+  // 4. 更新 undoPtr
   const performRedo = (eventFunc) => {
+    console.log('preformRedo:: undoPtr: ', undoPtr);
+    // undoPtr >= 2 表示先前执行过 undo
+    // 如果执行 undo 后又执行了编辑操作，reportEvent() 会重新把 undoPtr 置 0
     if (undoPtr >= 2) {
       const backsetEvent = stack.getNthFromTop(0);
       const selectionEvent = stack.getNthFromTop(1);
       eventFunc(backsetEvent.backset, _getSelectionInfo(selectionEvent));
 
-      // undoEvent 出栈
       stack.popEvent();
-      // TODO-X undoEvent 已经出栈了，不是应该 undoPtr -= 1 吗？
+
+      // 1 个是弹出栈顶的 undoEvent，1 个是之前被 undo 现在又被 redo 的那个编辑操作
       undoPtr -= 2;
       console.log(`after redo:: undoPtr: ${undoPtr}  stack: `, stack.stackElements);
     } else { eventFunc(); }
