@@ -44,7 +44,7 @@ const undoModule = (() => {
       stackElements.push(
           {
             elementType: UNDOABLE_EVENT,
-            eventType: 'bottom',
+            eventType: 'bottom',          // 这是垫底的
           });
       numUndoableEvents = 1;
     };
@@ -207,14 +207,15 @@ const undoModule = (() => {
     return null;
   };
 
-  // TODO-X 哪些 event 会 report
+  // TODO-X 哪些 event 会 report，哪些会入 undo 栈
   // 1. 修改选区相关
   // 2. 鼠标相关
   // 3. 键盘相关
+  // 目的：更新选区 / 推入 undo 栈（或跟栈顶事件合并）
   const reportEvent = (event) => {
-    if (event.eventType !== 'idleWorkTimer') {
-      console.log('report');
-    }
+    // if (event.eventType !== 'idleWorkTimer') {
+    console.log('report', event.eventType);
+    // }
     const topEvent = stack.getNthFromTop(0);
 
     const applySelectionToTop = () => {
@@ -226,10 +227,7 @@ const undoModule = (() => {
     };
 
     if ((!event.backset) || Changeset.isIdentity(event.backset)) {  // 更新选区，undo 操作也会进这里
-      if (event.eventType !== 'idleWorkTimer') {
-        console.log('1');
-        console.log(event);
-      }
+      console.log('1');
       applySelectionToTop();
     } else {                                                        // event 是一个可以 undo 的操作，入栈
       console.log('2');

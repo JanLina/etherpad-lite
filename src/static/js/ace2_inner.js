@@ -297,8 +297,10 @@ function Ace2Inner(editorInfo, cssManagers) {
 
   let currentCallStack = null;
 
+  // TODO-X 这里的逻辑有点多
   const inCallStack = (type, action) => {
     if (disposed) return;
+    // console.log('ace2_inner:: inCallStack');
 
     const newEditEvent = (eventType) => {
       // console.log('ace2_inner:: newEditEvent');
@@ -309,6 +311,7 @@ function Ace2Inner(editorInfo, cssManagers) {
     };
 
     const submitOldEvent = (evt) => {
+      // console.log('ace2_inner:: submitOldEvent', evt);
       if (rep.selStart && rep.selEnd) {
         const selStartChar = rep.lines.offsetOfIndex(rep.selStart[0]) + rep.selStart[1];
         const selEndChar = rep.lines.offsetOfIndex(rep.selEnd[0]) + rep.selEnd[1];
@@ -338,7 +341,7 @@ function Ace2Inner(editorInfo, cssManagers) {
     };
 
     const startNewEvent = (eventType, dontSubmitOld) => {
-      // console.log('ace2_inner:: startNewEvent');
+      console.log('ace2_inner:: startNewEvent');
       const oldEvent = currentCallStack.editEvent;
       if (!dontSubmitOld) {
         submitOldEvent(oldEvent);
@@ -383,7 +386,7 @@ function Ace2Inner(editorInfo, cssManagers) {
     } finally {
       const cs = currentCallStack;
       if (cleanExit) {
-        submitOldEvent(cs.editEvent);
+        submitOldEvent(cs.editEvent);  // 这个方法里会 reportEvent(cs.editEvent)
         if (cs.domClean && cs.type !== 'setup') {
           if (cs.selectionAffected) {
             updateBrowserSelectionFromRep();
@@ -404,6 +407,7 @@ function Ace2Inner(editorInfo, cssManagers) {
   };
   editorInfo.ace_inCallStack = inCallStack;
 
+  // TODO-X 什么时候会调 inCallStackIfNecessary？
   const inCallStackIfNecessary = (type, action) => {
     if (!currentCallStack) {
       inCallStack(type, action);
@@ -765,7 +769,7 @@ function Ace2Inner(editorInfo, cssManagers) {
     return isTimeUp;
   };
 
-
+  // 传入的 func 应该只在闲置时间执行
   const makeIdleAction = (func) => {
     let scheduledTimeout = null;
     let scheduledTime = 0;
@@ -785,6 +789,7 @@ function Ace2Inner(editorInfo, cssManagers) {
       scheduledTimeout = scheduler.setTimeout(callback, delay);
     };
 
+    // 每次执行完定时任务，都要清空 timer，如果要连续的定时任务，需要自行在 func 里重新调起
     const callback = () => {
       scheduledTimeout = null;
       // func may reschedule the action
@@ -792,6 +797,8 @@ function Ace2Inner(editorInfo, cssManagers) {
     };
 
     return {
+      // 最晚在 ms 后触发
+      // 取消原来的定时任务，改为更早的触发
       atMost: (ms) => {
         const latestTime = now() + ms;
         if ((!scheduledTimeout) || scheduledTime > latestTime) {
@@ -801,12 +808,15 @@ function Ace2Inner(editorInfo, cssManagers) {
       // atLeast(ms) will schedule the action if not scheduled yet.
       // In other words, "infinity" is replaced by ms, even though
       // it is technically larger.
+      // 最早在 ms 后触发
+      // 取消原来的定时任务，改为更晚的触发
       atLeast: (ms) => {
         const earliestTime = now() + ms;
         if ((!scheduledTimeout) || scheduledTime < earliestTime) {
           reschedule(earliestTime);
         }
       },
+      // 取消定时任务
       never: () => {
         unschedule();
       },
@@ -820,12 +830,19 @@ function Ace2Inner(editorInfo, cssManagers) {
   editorInfo.ace_fastIncorp = fastIncorp;
 
   const idleWorkTimer = makeIdleAction(() => {
+    console.log('trigger idleWorkTimer');
     if (inInternationalComposition) {
       // don't do idle input incorporation during international input composition
       idleWorkTimer.atLeast(500);
       return;
     }
 
+    // inCallStackIfNecessary 里会调用 reportEvent 上报一个事件：
+    // {
+    //   eventType: 'idleWorkTimer',
+    //   backset: null,
+    // }
+    // TODO-X 这个事件可能后面会被更新？给 backset 赋值之类的
     inCallStackIfNecessary('idleWorkTimer', () => {
       const isTimeUp = newTimeLimit(250);
 
@@ -835,13 +852,15 @@ function Ace2Inner(editorInfo, cssManagers) {
       try {
         incorporateUserChanges();
 
-        if (isTimeUp()) return;
+        if (isTimeUp()) return;  // 如果 incorporateUserChanges 执行时长已经超过了 250ms，放弃后面的动作
 
         updateLineNumbers(); // update line numbers if any time left
         if (isTimeUp()) return;
         finishedImportantWork = true;
         finishedWork = true;
       } finally {
+        // 根据定时任务完成情况，决定多久后执行下一次任务
+        // 用 atMost 可能是因为有些地方需要尽快调用定时任务，就可以传入更小的延迟
         if (finishedWork) {
           idleWorkTimer.atMost(1000);
         } else if (finishedImportantWork) {
