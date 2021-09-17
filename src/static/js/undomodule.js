@@ -214,7 +214,7 @@ const undoModule = (() => {
   // 目的：更新选区 / 推入 undo 栈（或跟栈顶事件合并）
   const reportEvent = (event) => {
     // if (event.eventType !== 'idleWorkTimer') {
-    console.log('report', event.eventType);
+    // console.log('report', event.eventType);
     // }
     const topEvent = stack.getNthFromTop(0);
 

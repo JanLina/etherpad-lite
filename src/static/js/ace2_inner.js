@@ -830,7 +830,7 @@ function Ace2Inner(editorInfo, cssManagers) {
   editorInfo.ace_fastIncorp = fastIncorp;
 
   const idleWorkTimer = makeIdleAction(() => {
-    console.log('trigger idleWorkTimer');
+    // console.log('trigger idleWorkTimer');
     if (inInternationalComposition) {
       // don't do idle input incorporation during international input composition
       idleWorkTimer.atLeast(500);
@@ -2706,6 +2706,7 @@ function Ace2Inner(editorInfo, cssManagers) {
 
     let stopped = false;
 
+    // 这里会上报 eventType = 'handleKeyEvent' 的事件
     inCallStackIfNecessary('handleKeyEvent', function () {
       if (type === 'keypress' || (isTypeForSpecialKey && keyCode === 13 /* return*/)) {
         // in IE, special keys don't send keypress, the keydown does the action
@@ -3169,6 +3170,7 @@ function Ace2Inner(editorInfo, cssManagers) {
 
   let thisKeyDoesntTriggerNormalize = false;
 
+  // TODO-X 这里做了什么
   const doUndoRedo = (which) => {
     // precond: normalized DOM
     if (undoModule.enabled) {
