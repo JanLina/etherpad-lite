@@ -365,6 +365,7 @@ const handshake = () => {
 
       return;
     } else {
+      // 处理 server op（1）
       pad.collabClient.handleMessageFromServer(obj);
     }
   });

@@ -98,6 +98,7 @@ const undoModule = (() => {
           if (un.backset) {
             const excs = ex.changeset;
             const unbs = un.backset;
+            // TODO_X 这里做了 transform 处理
             un.backset = Changeset.follow(excs, un.backset, false, getAPool());
             ex.changeset = Changeset.follow(unbs, ex.changeset, true, getAPool());
             if ((typeof un.selStart) === 'number') {
@@ -207,7 +208,7 @@ const undoModule = (() => {
     return null;
   };
 
-  // TODO-X 哪些 event 会 report，哪些会入 undo 栈
+  // TODO_X 哪些 event 会 report，哪些会入 undo 栈
   // 1. 修改选区相关
   // 2. 鼠标相关
   // 3. 键盘相关
@@ -290,9 +291,9 @@ const undoModule = (() => {
     if (undoPtr < stack.numEvents() - 1) {
       // 拿到要 undo 的 event
       const backsetEvent = stack.getNthFromTop(undoPtr);
+      // backsetEvent 的前一个 event 的选区，即执行这个 backsetEvent 时的选区
       const selectionEvent = stack.getNthFromTop(undoPtr + 1);
 
-      // eventFunc 的第一个参数是一个 changeSet，第二个参数是选区信息（可选）
       const undoEvent = eventFunc(backsetEvent.backset, _getSelectionInfo(selectionEvent));
       stack.pushEvent(undoEvent);
       // 下一次 undo 的就是更早的操作（1 个是 backsetEvent，1 个是 undoEvent）

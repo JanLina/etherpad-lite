@@ -297,7 +297,6 @@ function Ace2Inner(editorInfo, cssManagers) {
 
   let currentCallStack = null;
 
-  // TODO-X 这里的逻辑有点多
   const inCallStack = (type, action) => {
     if (disposed) return;
     // console.log('ace2_inner:: inCallStack');
@@ -341,7 +340,6 @@ function Ace2Inner(editorInfo, cssManagers) {
     };
 
     const startNewEvent = (eventType, dontSubmitOld) => {
-      console.log('ace2_inner:: startNewEvent');
       const oldEvent = currentCallStack.editEvent;
       if (!dontSubmitOld) {
         submitOldEvent(oldEvent);
@@ -350,6 +348,7 @@ function Ace2Inner(editorInfo, cssManagers) {
       return oldEvent;
     };
 
+    // 重置 currentCallStack
     currentCallStack = {
       type,
       docTextChanged: false,
@@ -365,8 +364,10 @@ function Ace2Inner(editorInfo, cssManagers) {
     let cleanExit = false;
     let result;
     try {
+      // action() 里面可能修改 currentCallStack 的东西
       result = action();
 
+      // 触发 aceEditEvent 钩子的所有回调
       hooks.callAll('aceEditEvent', {
         callstack: currentCallStack,
         editorInfo,
@@ -385,8 +386,9 @@ function Ace2Inner(editorInfo, cssManagers) {
       throw e;
     } finally {
       const cs = currentCallStack;
+      // action 执行成功了，上报事件
       if (cleanExit) {
-        submitOldEvent(cs.editEvent);  // 这个方法里会 reportEvent(cs.editEvent)
+        submitOldEvent(cs.editEvent);
         if (cs.domClean && cs.type !== 'setup') {
           if (cs.selectionAffected) {
             updateBrowserSelectionFromRep();
@@ -399,19 +401,23 @@ function Ace2Inner(editorInfo, cssManagers) {
           }
         }
       } else if (currentCallStack.type === 'idleWorkTimer') {
+        // action 执行失败，如果是定时任务，至少 1s 后再次执行
         idleWorkTimer.atLeast(1000);
       }
+      // 清空 currentCallStack
       currentCallStack = null;
     }
     return result;
   };
   editorInfo.ace_inCallStack = inCallStack;
 
-  // TODO-X 什么时候会调 inCallStackIfNecessary？
+  // 尽量在 inCallStack 里执行 action
   const inCallStackIfNecessary = (type, action) => {
     if (!currentCallStack) {
+      // 当前没有操作，在 inCallStack 里执行 action
       inCallStack(type, action);
     } else {
+      // 当前有操作，只能直接执行 action
       action();
     }
   };
@@ -837,12 +843,7 @@ function Ace2Inner(editorInfo, cssManagers) {
       return;
     }
 
-    // inCallStackIfNecessary 里会调用 reportEvent 上报一个事件：
-    // {
-    //   eventType: 'idleWorkTimer',
-    //   backset: null,
-    // }
-    // TODO-X 这个事件可能后面会被更新？给 backset 赋值之类的
+    // TODO_X 定时任务里具体做了什么
     inCallStackIfNecessary('idleWorkTimer', () => {
       const isTimeUp = newTimeLimit(250);
 
@@ -1560,6 +1561,7 @@ function Ace2Inner(editorInfo, cssManagers) {
           length: () => rep.lines.length(),
         }, rep.alines, rep.apool);
 
+        // 将取反后的 changes 合并到 currentCallStack.editEvent.backset
         if (!editEvent.backset) {
           editEvent.backset = inverseChangeset;
         } else {
@@ -3170,7 +3172,8 @@ function Ace2Inner(editorInfo, cssManagers) {
 
   let thisKeyDoesntTriggerNormalize = false;
 
-  // TODO-X 这里做了什么
+  // 在 undo/redo 里，currentCallStack 的作用就是临时创建一个对应的 undo/redo 事件，放入 currentCallStack
+  // undo/redo 执行的时候就可以对这个新事件进行修改，undo/redo 结束后，恢复 currentCallStack 的值
   const doUndoRedo = (which) => {
     // precond: normalized DOM
     if (undoModule.enabled) {
@@ -3178,10 +3181,20 @@ function Ace2Inner(editorInfo, cssManagers) {
       if (which === 'undo') whichMethod = 'performUndo';
       if (which === 'redo') whichMethod = 'performRedo';
       if (whichMethod) {
+        // 保存旧值
         const oldEventType = currentCallStack.editEvent.eventType;
+        // 临时赋值，undo/redo 操作结束后，就会恢复旧值
         currentCallStack.startNewEvent(which);
+
         undoModule[whichMethod]((backset, selectionInfo) => {
           console.log('ace2_inner::: backset:: ', backset, 'selectionInfo:: ', selectionInfo);
+          // 1. 将 backset 应用到文档
+          // 2. performDocumentApplyChangeset 里会将 currentCallStack.editEvent.backset 更新为 backset 的反操作
+          // 举个栗子：
+          // event1：输入abc，backset 为删除abc，event1 入栈
+          // undoEvent：应用 event1.backset（删除abc），backset 为输入abc，undoEvent 入栈
+          // redoEvent：应用 undoEvent.backset（输入abc），redoEvent 不入栈，undoEvent 出栈
+
           if (backset) {
             performDocumentApplyChangeset(backset);
           }
@@ -3194,6 +3207,8 @@ function Ace2Inner(editorInfo, cssManagers) {
                 selectionInfo.selFocusAtStart
             );
           }
+
+          console.log('马上要生成undoEvent了:: currentCallStack', JSON.stringify(currentCallStack));
           const oldEvent = currentCallStack.startNewEvent(oldEventType, true);
           return oldEvent;
         });

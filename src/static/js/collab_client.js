@@ -179,6 +179,7 @@ const getCollabClient = (ace2editor, serverVars, initialUserInfo, options, _pad)
     }
   }();
 
+  // 处理 server op（2）
   const handleMessageFromServer = (evt) => {
     if (!getSocket()) return;
     if (!evt.data) return;
@@ -186,6 +187,7 @@ const getCollabClient = (ace2editor, serverVars, initialUserInfo, options, _pad)
     if (wrapper.type !== 'COLLABROOM' && wrapper.type !== 'CUSTOM') return;
     const msg = wrapper.data;
 
+    // 其他 Client 产生的 op
     if (msg.type === 'NEW_CHANGES') {
       serverMessageTaskQueue.enqueue(async () => {
         // Avoid updating the DOM while the user is composing a character. Notes about this `await`:

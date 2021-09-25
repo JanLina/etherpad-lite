@@ -1926,6 +1926,8 @@ exports.inverse = (cs, lines, alines, pool) => {
 };
 
 // %CLIENT FILE ENDS HERE%
+// TODO_X
+// follow 方法其实就是 OT 的 transform 方法
 exports.follow = (cs1, cs2, reverseInsertOrder, pool) => {
   const unpacked1 = exports.unpack(cs1);
   const unpacked2 = exports.unpack(cs2);

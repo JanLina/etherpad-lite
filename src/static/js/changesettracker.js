@@ -93,6 +93,8 @@ const makeChangesetTracker = (scheduler, apool, aceCallbacksProvider) => {
 
       setChangeCallbackTimeout();
     },
+    // 处理 server op（3）
+    // 收到其他 client 的 op 后会调用这个方法把 op 应用到文档
     applyChangesToBase: (c, optAuthor, apoolJsonObj) => {
       if (!tracking) return;
 
@@ -105,6 +107,9 @@ const makeChangesetTracker = (scheduler, apool, aceCallbacksProvider) => {
         baseAText = Changeset.applyToAText(c, baseAText, apool);
 
         let c2 = c;
+        // 如果有待确认的 op，对 server op 和待确认 op 做 transform
+        // 看起来是 server op 的权重更高，因为收到这个 server op 说明 Server 已经处理完了，而当前 Client 发送出去的 op 还没有收到 ack
+        // 总之遵循一个原则：Server 先处理了哪个，transform 的时候哪个的权重就更高
         if (submittedChangeset) {
           const oldSubmittedChangeset = submittedChangeset;
           submittedChangeset = Changeset.follow(c, oldSubmittedChangeset, false, apool);

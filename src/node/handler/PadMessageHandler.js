@@ -1,4 +1,5 @@
 'use strict';
+// 如下注释
 /**
  * The MessageHandler handles all Messages that comes from Socket.IO and controls the sessions
  */
@@ -532,6 +533,7 @@ const handleUserInfoUpdate = async (socket, message) => {
  * @param socket the socket.io Socket object for the client
  * @param message the message from the client
  */
+// Server 处理 client op
 const handleUserChanges = async (socket, message) => {
   // This one's no longer pending, as we're gonna process it now
   stats.counter('pendingEdits').dec();
@@ -634,6 +636,7 @@ const handleUserChanges = async (socket, message) => {
     // The client's changeset might not be based on the latest revision,
     // since other clients are sending changes at the same time.
     // Update the changeset so that it can be applied to the latest revision.
+    // baseRev 小于 serverRev
     while (r < pad.getHeadRevisionNumber()) {
       r++;
 
@@ -957,6 +960,7 @@ const handleClientReady = async (socket, message, authorID) => {
                     ` authorID:${authorID}`}${
     (user && user.username) ? ` username:${user.username}` : ''}`);
 
+  // 掉线重连，补发缺失版本
   if (message.reconnect) {
     // If this is a reconnect, we don't have to send the client the ClientVars again
     // Join the pad and start receiving updates
@@ -990,6 +994,7 @@ const handleClientReady = async (socket, message, authorID) => {
     }
 
     // get changesets, author and timestamp needed for pending revisions (in parallel)
+    // 将所有缺失的版本的 changeset、author、date 都保存到 changesets 对象
     const promises = [];
     for (const revNum of revisionsNeeded) {
       const cs = changesets[revNum];
@@ -1000,6 +1005,7 @@ const handleClientReady = async (socket, message, authorID) => {
     await Promise.all(promises);
 
     // return pending changesets
+    // 将缺失的版本一个一个补发
     for (const r of revisionsNeeded) {
       const forWire = Changeset.prepareForWire(changesets[r].changeset, pad.pool);
       const wireMsg = {type: 'COLLABROOM',
@@ -1013,6 +1019,7 @@ const handleClientReady = async (socket, message, authorID) => {
       socket.json.send(wireMsg);
     }
 
+    // 通知 client 全部补发完毕
     if (startNum === endNum) {
       const Msg = {type: 'COLLABROOM',
         data: {type: 'CLIENT_RECONNECT',
