@@ -1944,13 +1944,13 @@ exports.follow = (cs1, cs2, reverseInsertOrder, pool) => {
   const hasInsertFirst = exports.attributeTester(['insertorder', 'first'], pool);
 
   const newOps = exports.applyZip(unpacked1.ops, 0, unpacked2.ops, 0, (op1, op2, opOut) => {
-    if (op1.opcode === '+' || op2.opcode === '+') {
+    if (op1.opcode === '+' || op2.opcode === '+') {  // 至少一个 op 是 insert
       let whichToDo;
       if (op2.opcode !== '+') {
         whichToDo = 1;
       } else if (op1.opcode !== '+') {
         whichToDo = 2;
-      } else {
+      } else {                                       // 都是 insert
         // both +
         const firstChar1 = chars1.peek(1);
         const firstChar2 = chars2.peek(1);
@@ -1965,7 +1965,7 @@ exports.follow = (cs1, cs2, reverseInsertOrder, pool) => {
           whichToDo = 2;
         } else if (firstChar1 !== '\n' && firstChar2 === '\n') {
           whichToDo = 1;
-        } else if (reverseInsertOrder) {
+        } else if (reverseInsertOrder) {              // 两个 op 都是 insert，且参数 reverseInsertOrder === true
           // break symmetry:
           whichToDo = 2;
         } else {
