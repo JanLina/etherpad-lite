@@ -103,11 +103,12 @@ const undoModule = (() => {
             const unbs = un.backset;
 
             // TODO_X
-            // un.backset 基于 ex 做 transform，ex 权重更高
+            // 即使 ex 和 un 没有冲突，经过 transform 后的 ex 还是发生了改变
+            // un.backset 基于 ex 做 transform，具体是怎么 transform 的？
             console.log('before::: un.backset: ', un.backset);
             un.backset = Changeset.follow(excs, un.backset, false, getAPool());
             console.log('after::: un.backset: ', un.backset);
-            // ex.changeset 基于 un 做 transform，un 权重更高
+            // ex.changeset 基于 un 做 transform，具体是怎么 transform 的？
             console.log('before::: ex.changeset: ', ex.changeset);
             ex.changeset = Changeset.follow(unbs, ex.changeset, true, getAPool());
             console.log('after::: ex.changeset: ', ex.changeset);
