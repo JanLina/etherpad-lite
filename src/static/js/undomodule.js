@@ -54,12 +54,14 @@ const undoModule = (() => {
       const e = _.extend(
           {}, event);
       e.elementType = UNDOABLE_EVENT;
-      console.log('push', e, stackElements);
+      // console.log('push', e, stackElements);
       stackElements.push(e);
       numUndoableEvents++;
       // dmesg("pushEvent backset: "+event.backset);
     };
 
+    // 收到别的 client 的 op 时，会调用 pushExternalChange 将 ex 推入 stack
+    // 定时器下一次调用 reportEvent（里面会调用 _exposeEvent），_exposeEvent 就会把所有栈顶的 ex 往栈底推，推的过程中就会进行 transform
     const pushExternalChange = (cs) => {
       console.log('pushExternalChange');
 
@@ -80,6 +82,7 @@ const undoModule = (() => {
     // ********************************************************* 重点 *********************************************************
     // 取出距离栈顶 nthFromTop 的元素或者弹出栈顶元素的时候会调用
     const _exposeEvent = (nthFromTop) => {
+      console.log('_exposeEvent');
       // precond: 0 <= nthFromTop < numUndoableEvents
       const targetIndex = stackElements.length - 1 - nthFromTop;
       let idx = stackElements.length - 1;
@@ -98,9 +101,17 @@ const undoModule = (() => {
           if (un.backset) {
             const excs = ex.changeset;
             const unbs = un.backset;
-            // TODO_X 这里做了 transform 处理
+
+            // TODO_X
+            // un.backset 基于 ex 做 transform，ex 权重更高
+            console.log('before::: un.backset: ', un.backset);
             un.backset = Changeset.follow(excs, un.backset, false, getAPool());
+            console.log('after::: un.backset: ', un.backset);
+            // ex.changeset 基于 un 做 transform，un 权重更高
+            console.log('before::: ex.changeset: ', ex.changeset);
             ex.changeset = Changeset.follow(unbs, ex.changeset, true, getAPool());
+            console.log('after::: ex.changeset: ', ex.changeset);
+
             if ((typeof un.selStart) === 'number') {
               const newSel = Changeset.characterRangeFollow(excs, un.selStart, un.selEnd);
               un.selStart = newSel[0];
@@ -228,10 +239,8 @@ const undoModule = (() => {
     };
 
     if ((!event.backset) || Changeset.isIdentity(event.backset)) {  // 更新选区，undo 操作也会进这里
-      console.log('1');
       applySelectionToTop();
     } else {                                                        // event 是一个可以 undo 的操作，入栈
-      console.log('2');
       // 如果栈顶事件和 event 是同一个 eventType，合并、更新选区
       let merged = false;
       if (topEvent.eventType === event.eventType) {
