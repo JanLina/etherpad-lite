@@ -219,10 +219,11 @@ const getCollabClient = (ace2editor, serverVars, initialUserInfo, options, _pad)
         acceptCommit();
       });
     } else if (msg.type === 'CLIENT_RECONNECT') {
+      // 断网的 Client 再连上网之后，Server 会依次补发 Client 缺失的版本，socket 信息的 type 就是 CLIENT_RECONNECT
       // Server sends a CLIENT_RECONNECT message when there is a client reconnect.
       // Server also returns all pending revisions along with this CLIENT_RECONNECT message
       serverMessageTaskQueue.enqueue(() => {
-        if (msg.noChanges) {
+        if (msg.noChanges) {  // 没有需要补发的版本
           // If no revisions are pending, just make everything normal
           setIsPendingRevision(false);
           return;
@@ -237,9 +238,10 @@ const getCollabClient = (ace2editor, serverVars, initialUserInfo, options, _pad)
         if (author === pad.getUserId()) {
           acceptCommit();
         } else {
+          // 将补发的 changeset 一个一个应用到本地
           editor.applyChangesToBase(changeset, author, apool);
         }
-        if (newRev === headRev) {
+        if (newRev === headRev) {  // 全部补发完毕
           // Once we have applied all pending revisions, make everything normal
           setIsPendingRevision(false);
         }

@@ -82,7 +82,7 @@ const undoModule = (() => {
     // ********************************************************* 重点 *********************************************************
     // 取出距离栈顶 nthFromTop 的元素或者弹出栈顶元素的时候会调用
     const _exposeEvent = (nthFromTop) => {
-      console.log('_exposeEvent');
+      console.log('_exposeEvent', stackElements);
       // precond: 0 <= nthFromTop < numUndoableEvents
       const targetIndex = stackElements.length - 1 - nthFromTop;
       let idx = stackElements.length - 1;
@@ -102,16 +102,17 @@ const undoModule = (() => {
             const excs = ex.changeset;
             const unbs = un.backset;
 
-            // TODO_X
-            // transform 的目的是让顺序执行 un、ex 的效果 === 顺序执行 ex'、un' 的效果
-            // 因为后面会调换 un 和 ex 的位置
-            console.log('before::: un.backset: ', un.backset);
+            // un.backset' 要加上 ex.changeset 的影响
+            console.log('Starting follow un.backset ——————————————————');
+            console.log('before::: un.backset: ', un.backset, ' excs: ', excs);
             un.backset = Changeset.follow(excs, un.backset, false, getAPool());
-            console.log('after::: un.backset: ', un.backset);
+            console.log('after::: un.backset: ', un.backset, ' excs: ', excs);
 
-            console.log('before::: ex.changeset: ', ex.changeset);
+            // ex.changeset' 要去除 un.changeset 的影响
+            console.log('Starting follow ex.changeset ——————————————————');
+            console.log('before::: unbs: ', unbs, ' ex.changeset: ', ex.changeset);
             ex.changeset = Changeset.follow(unbs, ex.changeset, true, getAPool());
-            console.log('after::: ex.changeset: ', ex.changeset);
+            console.log('after::: unbs: ', unbs, ' ex.changeset: ', ex.changeset);
 
             if ((typeof un.selStart) === 'number') {
               const newSel = Changeset.characterRangeFollow(excs, un.selStart, un.selEnd);
@@ -297,7 +298,7 @@ const undoModule = (() => {
   // 2. 根据这个 UNDOABLE_EVENT 生成 undoEvent（elementType 也是 UNDOABLE_EVENT），推入 stack（eventFunc 里应该执行了具体的撤销操作）
   // 3. 更新 undoPtr
   const performUndo = (eventFunc) => {
-    console.log(`BEFORE Undo:: undoPtr: ${undoPtr}  stack.numEvents(): ${stack.numEvents()}`);
+    console.log(`BEFORE Undo:: undoPtr: ${undoPtr} stack: `, stack.stackElements);
     if (undoPtr < stack.numEvents() - 1) {
       // 拿到要 undo 的 event
       const backsetEvent = stack.getNthFromTop(undoPtr);
